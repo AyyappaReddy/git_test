@@ -1,0 +1,533 @@
+# @copyright (c) 2023 by Robert Bosch GmbH. All rights reserved.
+#
+# The reproduction, distribution and utilization of this file as
+# well as the communication of its contents to others without express
+# authorization is prohibited. Offenders will be held liable for the
+# payment of damages and can be prosecuted. All rights reserved
+# particularly in the event of the grant of a patent, utility model
+# or design.
+---
+# See https://pre-commit.com for more information
+default_stages: [commit, push]
+
+repos:
+  - repo: local
+    hooks:
+      # Enforce our path and filename rules:
+      # https://pages.github.boschdevcloud.com/Half-Dome/colibry-builds/develop/methods/SDH/repo_structure/general.html#file-and-folder-names
+      - id: filename-checker
+        always_run: true
+        entry: .githooks/pre-commit.d/filename_checker.py
+        language: system
+        name: Check that only allowed characters are used for file paths
+        pass_filenames: true
+      - id: changes-in-deprecated-files
+        language: system
+        name: Check that deprecated files are not modified
+        entry: .githooks/pre-commit.d/deprecated_files_check.py
+        stages: [commit]
+        pass_filenames: true
+      - id: check-python-versions
+        always_run: true
+        entry: .githooks/check_python_requirements.py black flake8 flake8-black
+        language: system
+        name: Check correct python packages are installed for pre-commit checks
+        pass_filenames: false
+        stages: [commit, post-checkout]
+      - id: check-python-requirements-lock-files-focal
+        always_run: true
+        entry: ./tools/athenadep/scripts/lock_python_deps.py check-input-hash . focal
+        language: system
+        name: Check Python requirements lock file for focal was updated if necessary
+        files: |
+          (?x)^(
+            tools/athenadep/aliases/.*
+          )$
+        pass_filenames: false
+        stages: [commit]
+      - id: check-python-requirements-lock-files-jammy
+        always_run: true
+        entry: ./tools/athenadep/scripts/lock_python_deps.py check-input-hash . jammy
+        language: system
+        name: Check Python requirements lock file for jammy was updated if necessary
+        files: |
+          (?x)^(
+            tools/athenadep/aliases/.*
+          )$
+        pass_filenames: false
+        stages: [commit]
+      - id: check-debian-versions
+        always_run: true
+        entry: .githooks/check_debian_requirements.py
+        language: system
+        name: Check correct debian packages are installed for pre-commit checks
+        pass_filenames: false
+        stages: [commit, post-checkout]
+      - id: black
+        name: Run black formatter
+        language: python
+        entry: black
+        require_serial: true
+        types: [python]
+        exclude: |
+          (?x)^(
+          common/libraries/external/ceres/.*|
+          common/libraries/external/onnx/.*|
+          common/libraries/internal/cpp_ros_converter/src/cpp_ros_converter/ext/clang/cindex.py|
+          common/libraries/internal/machineLearning/athena_inference_results/python/src/athena_inference_results/proto/.*|
+          tools/pythena-ci/src/athena/gatekeeper/generate_python_bazel_build_files.py|
+          common/bazel/tools/format_build_files/scripts/format_build_file.py
+          )$
+      - id: check-added-large-files
+        name: Check that large files are not being committed
+        language: system
+        entry: check-added-large-files
+        exclude: |
+          (?x)^(
+          common/libraries/external/xcf_core/include/xcf/xcf_smf_helper.inl|
+          motion_control/lib/tis_autocode/source/tis_AOS_data.c |
+          motion_control/lib/motion_control_autocode/source/mcfr_MEB41AD_IS4_3_mot_AOS.c
+          )$
+      - id: check-case-conflict
+        name: Check for files with names that would conflict on a case-insensitive filesystem
+        language: system
+        entry: check-case-conflict
+      - id: check-git-lfs
+        name: Check if Git LFS is installed correctly
+        language: system
+        entry: .githooks/check_git-lfs.sh
+        always_run: true
+      - id: check-json
+        name: Check json
+        language: python
+        entry: check-json
+        types: [json, file]
+        exclude: |
+          (?x)^(
+          stereo/tool/vscode/config/launch.json|
+          # Skipping auto-generated files tracked in LFS
+          stereo/library/vision_models/models/.*\.json|
+          surround_vision/svs_models/models/.*\.json|
+          traffic_signs/models/models/.*\.json|
+          vulnerable_road_users/tool/vru_models/models/.*\.json|
+          traffic_lights/library/mcw_vision_models/models/.*\.json|
+          traffic_lights/library/mcx_vision_models/models/.*\.json|
+          # The json files containing the test cases for sem contain some comments providing details for the tests
+          state_error_manager/tools/sem_testing_framework/config/.*\.json|
+          # This template file is an example containing explanation of the sem config schema
+          state_error_manager/sem_configuration/config/sem/subsystems/template.json|
+          # this is VSCODE config, indeed requires comments
+          .devcontainer/devcontainer.json|
+          common/libraries/external/onnx/.*|
+          tools/continuous_integration/large_files/stereo/test_data/sequence_image_exporter/.*|
+          localization/templates/vscode/workspace_specific/dot_vscode/.*\.json|
+          common/libraries/external/azure-sdk-for-cpp/.*
+          )$
+      - id: check-merge-conflict
+        name: Check for files that contain merge conflict strings
+        language: system
+        entry: check-merge-conflict
+      - id: check-shebang-scripts-are-executable
+        name: Check that scripts with shebang are executable
+        language: python
+        entry: check-shebang-scripts-are-executable
+        types: [text, shell]
+        exclude: |
+          (?x)^(
+          common/libraries/external/onnx/.*
+          )$
+      - id: check-symlinks
+        name: Check symlinks
+        language: system
+        entry: check-symlinks
+      - id: end-of-file-fixer
+        name: Makes sure files end in a newline and only a newline
+        language: system
+        entry: end-of-file-fixer
+        types: [text]
+        exclude: |
+          (?x)^(
+          # Snapshot tests mirror command output, which has multiple trailing newlines.
+          tools/ros_bag_tools/tests/testcases/.*\.output|
+          common/libraries/internal/cpp_ros_converter_tests/test/expected_ros_msgs/.*|
+          documentation/cpp_developer_guide/cpp_(coding_guidelines|naming_conventions).md|
+          surround_vision/tools/svs_training_storage_manager/tests/test_data/.*|
+          tools/continuous_integration/large_files/data_loop/.*|
+          .*\.drawio|
+          .*\.gie|
+          .*\.msg|
+          .*\.svg|
+          .*\.json|
+          devops/.gen/.*|
+          radar/lib/semantic_information/.*|
+          common/libraries/external/onnx/.*|
+          common/libraries/internal/cpp_ros_converter_tests/test/expected_ros_msgs/test_optional/msg/.*\.msg
+          )$
+      - id: clang-format
+        name: Run clang-format-athena-1
+        language: system
+        entry: clang-format-athena-1
+        types: [text]
+        files: \.(c|cc|cxx|cpp|cu|cuh|frag|glsl|h|hpp|hxx|inl)$
+        args: [-style=file, -i]
+        exclude: |
+          (?x)^(
+          # Don't format generated protobuf files. Re-ordering includes might break things.
+          .*\.pb.cc|
+          .*\.pb.h|
+          common/libraries/internal/vfc_contrib/.*|
+          motion_control/lib/motion_control_autocode/.*
+          )$
+      - id: autoflake
+        name: Run autoflake
+        language: python
+        entry: autoflake
+        require_serial: true
+        types: [python]
+        args: [-i, --ignore-pass-after-docstring]
+        exclude: |
+          (?x)^(
+          common/libraries/internal/cpp_ros_converter/src/cpp_ros_converter/ext/clang/cindex.py|
+          common/libraries/internal/machineLearning/athena_inference_results/python/src/athena_inference_results/proto/.*|
+          tools/pythena-ci/src/athena/gatekeeper/generate_python_bazel_build_files.py|
+          common/bazel/tools/format_build_files/scripts/format_build_file.py
+          )$
+      - id: flake8
+        name: Run flake8
+        language: python
+        entry: flake8
+        require_serial: true
+        types: [python]
+        exclude: |
+          (?x)^(
+          common/libraries/internal/cpp_ros_converter/src/cpp_ros_converter/ext/clang/cindex.py|
+          common/libraries/internal/machineLearning/athena_inference_results/python/src/athena_inference_results/proto/.*|
+          tools/pythena-ci/src/athena/gatekeeper/generate_python_bazel_build_files.py|
+          common/bazel/tools/format_build_files/scripts/format_build_file.py
+          )$
+      - id: isort
+        name: Run isort
+        language: system
+        entry: isort
+        require_serial: true
+        types: [python]
+        # isort mistakes workspace-level packages as third party modules, and mixes real third-party packages
+        # (e.g. from pip) with packages from our catkin workspace.
+        # Add your component to the exclude list if this is a problem for you:
+        exclude: |
+          (?x)^(
+          common/libraries/external/ceres/.*|
+          common/libraries/external/onnx/.*|
+          common/libraries/internal/cpp_ros_converter/src/cpp_ros_converter/ext/clang/cindex.py|
+          common/libraries/internal/machineLearning/athena_inference_results/python/src/athena_inference_results/proto/.*|
+          fusion/.*|
+          system-model/.*|
+          tools/fusion/.*|
+          tools/.*|
+          tools/pythena-ci/src/athena/gatekeeper/generate_python_bazel_build_files.py|
+          common/bazel/tools/format_build_files/scripts/format_build_file.py
+          )$
+        # sort a file alphabetically
+      - id: file-contents-sorter
+        name: file-contents-sorter
+        entry: file-contents-sorter
+        files: .cspell/custom-words.txt
+        language: system
+      - id: license-check
+        name: Check license
+        language: system
+        entry: ./common/utilities/license_header/scripts/update_headers_hook
+        stages: [commit]
+        types: [text]
+        require_serial: true
+        exclude: |
+          (?x)^(
+          # external libs
+          common/libraries/external/.*|
+          common/libraries/internal/cpp_ros_converter/src/cpp_ros_converter/ext/clang/cindex.py|
+          # Snapshot tests use a fixed 2020 date in their license headers.
+          tools/ros_bag_tools/tests/testcases/[^/]+/[^/]+_rules/.*\.d|
+          # templates have their own way to add headers
+          common/libraries/internal/hanf/tools/runnable_architect/runnable_architect/templates/com_model_generator/.*|
+          # Excluding auto-generated, in git-lfs tracked .cpp files that made problems. Since the files seem to be
+          # obsolete they can be removed soonish.
+          radar/lib/semantic_information/.*|
+          tools/documentation/proto2cpp/.*|
+          fusion/grid/deprecated/.*|
+          common/libraries/internal/machineLearning/athena_inference_results/python/src/athena_inference_results/proto/.*|
+          motion_control/lib/motion_control_autocode/.*|
+          tools/waitforme/helm/.*
+          )$
+      - id: pyupgrade
+        entry: pyupgrade --py38-plus
+        language: system
+        name: Check for upgradable syntax
+        require_serial: true
+        exclude: |
+          (?x)^(
+          # deactivate for all of monorepo for now, migrate according to large-scale code change guideline:
+          \.githooks/.*|
+          \.github/.*|
+          audio/.*|
+          backend/.*|
+          calibration/.*|
+          cloud/.*|
+          common/.*|
+          config/.*|
+          devops/.*|
+          documentation/.*|
+          fusion/.*|
+          hmi/.*|
+          localization/.*|
+          machine_learning/.*|
+          motion_control/.*|
+          # Excluding auto-generated, in git-lfs tracked .cpp files that made problems. Since the files seem to be
+          # obsolete they can be removed soonish.
+          radar/lib/semantic_information/.*|
+          state_error_manager/.*|
+          system-model/.*|
+          tools/.*|
+          ultrasonic/.*|
+          vehicle_control_center/lib/protobuf/include/.*|
+          vehicle_functions/.*
+          )$
+        types: [python]
+      # running into a failed check of the pymarkdown hook? Get help here:
+      # https://pages.github.boschdevcloud.com/Half-Dome/colibry-builds/methods/docs_as_code/markdown_style_guide.html#tool-support
+      - id: pymarkdown
+        name: PyMarkdown
+        description: "PyMarkdown - GitHub Flavored Markdown and CommonMark Compliant Linter"
+        language: python
+        language_version: python3
+        entry: pymarkdown
+        types: [markdown]
+        # add files here on which pymarkdown exits with error (e.g. BadTokenizationError), issues false positive warnings, or which you want to ignore
+        exclude: |
+          (?x)^(
+          documentation/athena_old/.*|
+          documentation/cpp_developer_guide/.*|
+          documentation/03_sud_adkit/requirements/sensor_set_spec/.*|
+          lidar/cr_perception_kit_object_detection/.*|
+          lidar/models/.*|
+          tools/pythena-ci/src/athena/gatekeeper/generate_python_bazel_build_files.py|
+          common/bazel/tools/format_build_files/scripts/format_build_file.py
+          )$
+        files: |
+          (?x)^(
+          architecture/.*|
+          documentation/.*|
+          fusion/doc/.*|
+          fusion/mops/doc/.*|
+          tools/fusion/.*|
+          lidar/.*
+          )$
+        args:
+          - --config=pymarkdown.json
+          - --strict-config
+          - scan
+      # see also: .rstcheck.cfg in repository root folder
+      - id: rstcheck
+        name: rstcheck
+        entry: rstcheck
+        language: python
+        types: [rst]
+        exclude: |
+          (?x)^(
+          documentation/athena_old/.*|
+          documentation/templates/design_document_template.rst |
+          common/libraries/external/.*|
+          # deactivate for all folders of monorepo with conflicting rst files for now, activate on a component by component basis
+          cloud/.*|
+          common/.*|
+          state_error_manager/.*
+          )$
+      # We use yamllint with mostly PACE-compatible rules. See .yamllint.yml for details.
+      - id: yamllint
+        name: Lint YAML files
+        description: This hook runs yamllint.
+        entry: yamllint
+        language: python
+        types: [yaml]
+        exclude: |
+          (?x)^(
+          # Too many findings for now
+          architecture/yaaa_model/deploy/.*|
+          common/libraries/external/.*|
+          # To be deleted soon anyways
+          fusion/mops/config_loader/.*|
+          .*\.clang-tidy|
+          git-shard-notifier.yml
+          )$
+        # roll out yamllint on an opt-in basis. At least YAAA model and PACE-synced folder should be in this list.
+        files: |
+          (?x)^(
+          architecture/components/.*|
+          architecture/parameters/fusion/.*|
+          architecture/yaaa_model/.*|
+          fusion/mops/.*
+          )$
+        args: [--format, parsable, --strict, -c, .yamllint.yml]
+        additional_dependencies: []
+      - id: bazel-yaaa
+        name: Update bazel predeclared outputs
+        entry: tools/pythena-ci/src/athena/gatekeeper/generate_yaaa_bazel_outputs.py
+        language: system
+        types: [yaml]
+        files: |
+          (?x)^(
+          architecture/parameters/.*|
+          architecture/yaaa_model/.*
+          )$
+        pass_filenames: false
+      # FIXME: bazel can't run commands in parallel.
+      # - id: bazel-build-file-format
+      #   name: Ensure bazel BUILD files are formatted.
+      #   entry: ./common/bazel/tools/format_build_files/githook.sh
+      #   language: system
+      #   types: [text]
+      #   files: |
+      #     (?x)^(
+      #     .*/BUILD
+      #     )$
+      #   pass_filenames: true
+      - id: sync-old-new-aos-yaaa-model
+        name: Synchronize carma_0_18 and carma_0_22 architecture folders
+        entry: architecture/yaaa_model/src/yaaa_model_sync.py
+        language: system
+        types: [yaml]
+        stages: [commit]
+        files: |
+          (?x)^(
+          architecture/yaaa_model/.*
+          )$
+        always_run: true
+      - id: trailing-whitespace-fixer
+        name: Trims trailing whitespace
+        language: python
+        entry: trailing-whitespace-fixer
+        types: [text]
+        exclude: |
+          (?x)^(
+          # Snapshot tests mirror command output, which may have trailing whitespace.
+          tools/ros_bag_tools/tests/testcases/.*/migration\.diff|
+          documentation/cpp_developer_guide/cpp_(coding_guidelines|naming_conventions).md|
+          # cpp_core_guideline diffs are stored in special 'diff_match_patch' format
+          documentation/cpp_developer_guide/source/cpp_core_guidelines/diffs/.*\.diff|
+          # conflicts with the used template
+          .*\.drawio|
+          .*\.gie|
+          .*\.msg|
+          .*\.svg|
+          common/libraries/external/.*|
+          surround_vision/tools/svs_training_storage_manager/tests/test_data/.*|
+          tools/continuous_integration/large_files/stereo/test_data/sequence_image_exporter/.*|
+          # deactivate for all of monorepo for now, migrate according to large-scale code change guideline:
+          \.githooks/.*|
+          \.github/.*|
+          audio/.*|
+          backend/.*|
+          calibration/.*|
+          cloud/.*|
+          common/.*|
+          config/.*|
+          devops/.*|
+          documentation/athena_old.*|
+          documentation/cpp_developer_guide.*|
+          documentation/organization.*|
+          documentation/tools.*|
+          hmi/.*|
+          localization/.*|
+          machine_learning/.*|
+          motion_control/.*|
+          # Excluding auto-generated, in git-lfs tracked .cpp files that made problems. Since the files seem to be
+          # obsolete they can be removed soonish.
+          radar/lib/semantic_information/.*|
+          state_error_manager/.*|
+          system-model/.*|
+          tools/(?!fusion)|
+          tools/fusion/fusion_ci/groovy_gen/.*|
+          tools/continuous_integration/large_files/stereo/test_data/scenarios/.*|
+          ultrasonic/.*|
+          vehicle_control_center/lib/protobuf/include/.*|
+          vehicle_functions/.*|
+          # azure logs shall be kept as is
+          .*/model_info/aml_training_logs/.*
+          )$
+      - id: check-continuous-integration-tag
+        entry: tools/pythena-ci/src/athena/gatekeeper/ci-metadata.py update-athenadep-hash --auto-stage
+        language: system
+        name: Check continuous integration tag is correct
+        pass_filenames: false
+        stages: [commit]
+        files: |
+          (?x)^(
+          config/osd-ansible/dockerfiles/base/.*|
+          config/osd-ansible/dockerfiles/gatekeeper/.*|
+          config/osd-ansible/playbooks/gatekeeper/.*|
+          config/osd-ansible/playbooks/base_docker/.*|
+          config/osd-ansible/roles/base_docker_roles/.*|
+          config/osd-ansible/roles/devs_roles/.*|
+          config/osd-ansible/roles/shared_roles/.*|
+          config/osd-ansible/roles/gatekeeper_roles/.*|
+          tools/athenadep/apt_config/apt_config.yaml|
+          tools/athenadep/scripts/meta_package.py|
+          tools/athenadep/scripts/ci_create_meta_packages.py|
+          tools/athenadep/scripts/ci_create_docker_files.py|
+          tools/athenadep/config/package_map.json|
+          tools/athenadep/config/osd-ansible-halfdome-roles.yaml|
+          tools/athenadep/aliases/vehicle/common.yaml|
+          tools/athenadep/aliases/vehicle/common_large_packages.yaml|
+          tools/athenadep/aliases/vehicle/athena.yaml|
+          tools/athenadep/aliases/aliases.yaml|
+          tools/athenadep/aliases/aliases_unused.yaml|
+          tools/continuous_integration/ci-metadata.yaml|
+          maps/map_release_config/config.json
+          )$
+      - id: devops-docgen
+        name: Devops doc generation check
+        language: system
+        types: [file]
+        stages: [commit]
+        entry: ./devops/scripts/docgen.py
+        pass_filenames: false
+        files: |
+          (?x)^(
+          devops/scripts/docgen.py|
+          devops/.*.ya?ml
+          )$
+      # In case Localization Test definition changes, regenerate the test cases
+      - id: loc-generate-test-cases
+        name: LOC - Generate Test Cases
+        language: system
+        types: [text]
+        stages: [commit]
+        files: ^(localization\/testing\/.*|localization\/localization\/ros_localization\/launch\/.*|maps\/map_release_config\/config.json)$
+        entry: ./localization/testing/generate_tests.py
+        pass_filenames: false
+      # In case DTorch or the ADO templates changed then run validation of interface
+      - id: dtorch-validate-ado-interface
+        name: DTorch - Validate ADO Interfaces
+        language: system
+        types: [text]
+        stages: [commit]
+        files: ^(.*\.ya?ml|tools\/dtorch\/.*|devops\/.*)$
+        entry: ./tools/dtorch/githook.sh ado validate
+        pass_filenames: false
+      # In case some of the Test Cases / Test Suites / Test Plans change, verify the files schema
+      - id: dtorch-validate-test-schemas
+        name: DTorch - Validate Test Schemas
+        language: system
+        types: [text]
+        stages: [commit]
+        files: ^(.*\.ya?ml|tools\/dtorch\/.*|devops\/.*)$
+        entry: ./tools/dtorch/githook.sh core validate
+        pass_filenames: false
+      # In case some of the Test Cases / Test Suites / Test Plans change, verify pipeline generation was done
+      - id: dtorch-static-generations
+        name: DTorch - Generate Static Tests
+        language: system
+        stages: [commit]
+        types: [text]
+        files: ^(.*\.ya?ml|tools\/dtorch\/.*|devops\/.*|tools\/athenadep\/.*)$
+        entry: ./tools/dtorch/githook.sh ado generate-static
+        pass_filenames: false
