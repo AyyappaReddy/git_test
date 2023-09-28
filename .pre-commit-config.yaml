@@ -1,0 +1,288 @@
+default_stages: [commit] # run hooks on commit unless specified otherwise
+
+exclude: (\/3rdparty\/|\/third_party\/|\/third-party\/)
+
+repos:
+  - repo: meta
+    hooks:
+      - id: identity
+
+  - repo: local
+    hooks:
+      - id: codespell
+        name: codespell
+        description: Check for common missspellings
+        entry: codespell --ignore-words .codespellignore
+        language: python
+        files: ^(yase_.*/|simax_.*/|simulation_.*/|eval/|air_flow/|air_flow_client/)(.*)
+        exclude: "^(simax_.*/share/protobuf)"
+      - id: clang-format
+        name: Format C++ files
+        description: Format files with ClangFormat
+        entry: clang-format
+        language: system
+        files: ^(simax_|yase_)(.*)\.(c|cc|cxx|cpp|h|hpp|hxx)$
+        exclude: "^(yase_.*/third_party|\
+          yase_.*/generated|\
+          simax_.*/third_party)"
+        args: [-i, -Werror, -fallback-style=none]
+      - id: pylint
+        name: pylint
+        entry: pylint
+        language: system
+        types: [python]
+        args: ["-rn", "-sn"]
+        exclude: |
+          (?x)(
+            # DoL REST API clients are generated code
+            ^launcher_compute/src/launcher_compute/dol/(player|recorder)_.*|
+            # DT Flow Client
+            ^air_flow_client/.*|
+            # DT Flow
+            ^air_flow/.*
+          )
+      - id: mypy
+        name: mypy
+        description: Run mypy for Python static type analysis
+        entry: "tools/code_checks/run-mypy"
+        language: script
+        types: [python]
+        require_serial: true
+        verbose: true
+        # DT Flow is not included in mypy as long as tracked in PACE!
+        files: ^(dol_system/|launcher/|launcher_compute/)(.*)$
+      - id: black
+        name: black python formatter
+        entry: black
+        language: system
+        types: [python]
+        require_serial: true
+        exclude: |
+          (?x)^(
+            # DT Flow Patches
+            air_flow/airflow_patches/.*
+          )
+      - id: isort
+        name: sort imports using isort
+        entry: isort
+        language: system
+        types: [python]
+        exclude: |
+          (?x)^(
+            # Airflow patches might be non-compliant but this is OK
+            air_flow/airflow_patches/.*
+          )
+
+      - id: commit-message
+        name: Process commit message
+        description: Add the branch's ticket ID to the commit message (if none is present there)
+        stages: [commit-msg]
+        entry: "tools/code_checks/commit_msg.py"
+        args: [".git/COMMIT_EDITMSG"]
+        language: script
+        types: [python]
+        always_run: true
+        verbose: true
+      - id: license-check
+        name: Copyright validity
+        description: Validates copyright header or adds copyright if not available
+        entry: "tools/copyright/scripts/verify_headers_hook"
+        language: script
+        types: [text]
+        verbose: true
+        exclude: |
+          (?x)(
+            ^(yase_*|simax_*|air_flow*)|
+            system_hol/.*\/realtime_system/.*\.[ch]|
+            ^tools/ansible/.*
+          )
+      - id: clang-tidy
+        name: Lint C++ files
+        entry: run-clang-tidy
+        language: python
+        types: [c++]
+        args:
+          [
+            "-p=build",
+            "-quiet",
+            "-header-filter=.*",
+            "-config={
+                        Checks: '
+                          bugprone-*,
+                          -bugprone-copy-constructor-init,
+                          -clang-diagnostic-deprecated-declarations,
+                          cppcoreguidelines-*,
+                          -cppcoreguidelines-owning-memory,
+                          -cppcoreguidelines-avoid-magic-numbers,
+                          -cppcoreguidelines-special-member-functions,
+                          -cppcoreguidelines-non-private-member-variables-in-classes,
+                          -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+                          -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+                          -cppcoreguidelines-avoid-goto,
+                          -cppcoreguidelines-avoid-c-arrays,
+                          -cppcoreguidelines-pro-bounds-constant-array-index,
+                          -cppcoreguidelines-macro-usage,
+                          concurrency-*,
+                          misc-*,
+                          -misc-non-private-member-variables-in-classes,
+                          modernize-*,
+                          -modernize-use-nodiscard,
+                          -modernize-use-trailing-return-type,
+                          readability-*,
+                          -readability-avoid-const-params-in-decls,
+                          -readability-const-return-type,
+                          -readability-magic-numbers,
+                          -readability-named-parameter,
+                          -readability-uppercase-literal-suffix',
+                        WarningsAsErrors: '
+                          bugprone-*,
+                          cppcoreguidelines-*,
+                          concurrency-*,
+                          misc-*,
+                          modernize-*,
+                          readability-*,',
+                        CheckOptions: [
+                          { key: readability-identifier-naming.ClassCase, value: CamelCase },
+                          { key: readability-identifier-naming.EnumCase, value: CamelCase },
+                          { key: readability-identifier-naming.FunctionCase, value: camelBack },
+                          { key: readability-identifier-naming.NamespaceCase, value: lower_case }
+                        ],
+                      }
+            "
+          ]
+        files: ^(simax_|yase_middle_end).*\.(c|cc|cxx|cpp|h|hpp|hxx)$
+        exclude: "(?x)^(simax_legacy|simax_carla/.*|simax_serialization/simax_serialization_protobuf/.*.cpp|\
+          simax_.*/third-party)"
+      - id: iwyu
+        name: iwyu
+        description: Optimize includes for changed files.
+        entry: tools/iwyu/run_iwyu.sh
+        language: system
+        verbose: true
+        files: ^(simax_core|simax_backend).*\.(c|cc|cxx|cpp|h|hpp|hxx)$
+        exclude: "^(yase_.*/third_party|\
+          yase_.*/generated|\
+          simax_.*/third_party)"
+      - id: mypy_eval
+        name: mypy_eval
+        description: Run mypy for eval using pantsbuild
+        entry: "eval/pants"
+        args: ["check", "pmt/eval"]
+        language: script
+        types: [python]
+        require_serial: true
+        pass_filenames: false
+        verbose: true
+        files: ^(eval)(.*)$
+
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.14
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          # get more plugins here
+          # https://mdformat.readthedocs.io/en/stable/users/plugins.html
+          - mdformat-gfm
+          - mdformat-black
+        args: [--wrap, "120"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0 # Use the ref you want to point at
+    hooks:
+      - id: check-yaml
+        args: [--unsafe] # Instead of loading the file, it just checks for syntax
+        exclude: |
+          (?x)^(
+            # Jenkins  pipeline syntax smell like YAML but is pre-processed, not YAML compliant
+            air_flow_deployment/helm/helmfile.yaml|
+            jenkins/configs/default.yaml|
+            tools/git_crypt/sol-technical-users.yaml
+          )
+      - id: check-json
+        exclude: |
+          (?x)(
+            # DevContainer JSON contains comments which are not JSON default acceptable
+            ^\.devcontainer/devcontainer\.json|
+            # VSCode settings also contain comments which are not JSON standard
+            \.vscode/.*\.json|
+            # Ignore generated hol code
+            system_hol/.*\/realtime_system/.*\.json
+          )
+
+    # VSCode settings are containing comments, so another checker is needed here
+  - repo: https://gitlab.com/bmares/check-json5
+    rev: v1.0.0
+    hooks:
+      - id: check-json5
+        files: |
+          (?x)(
+            ^\.devcontainer/devcontainer\.json|
+            \.vscode/.*\.json
+          )
+
+  - repo: https://github.com/adrienverge/yamllint.git
+    rev: v1.26.3
+    hooks:
+      - id: yamllint
+        exclude: |
+          (?x)^(
+            jenkins/configs/default.yaml|
+            tools/git_crypt/sol-technical-users.yaml|
+            .clang-tidy|
+            eval/copyright-ignore/eval.yaml|
+            dol_apis/.*
+          )
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.8.0.4
+    hooks:
+      - id: shellcheck
+
+  - repo: https://github.com/pocc/pre-commit-hooks
+    rev: v1.3.5
+    hooks:
+      - id: cppcheck
+        args:
+          [
+            "-q",
+            "-v",
+            "--error-exitcode=1",
+            "--suppress=*:*third-party*", # exclude third-party folder (simax)
+            "--suppress=*:*third_party*", # exclude third_party folder (yase)
+            "--suppress=*:*simax_core_common/include/simax_core_common/math/obb/obb.h",
+            "--suppress=*:*agnostic_type_system/variant.h",
+            "--suppress=*:*yase_front_end/osc2/src/*",
+            "--language=c++",
+            "--std=c++17",
+            "--enable=all",
+            "--suppress=unmatchedSuppression",
+            "--suppress=missingIncludeSystem",
+            "--suppress=missingInclude",
+            "--suppress=unusedFunction",
+            "--suppress=unusedStructMember",
+            "--suppress=useStlAlgorithm",
+            "--suppress=internalAstError",
+            "--suppress=ignoredReturnValue",
+            "--suppress=passedByValue",
+            "--suppress=constStatement",
+            "--suppress=noExplicitConstructor",
+            "--suppress=toomanyconfigs",
+            "--library=googletest"
+          ]
+        exclude: |
+          (?x)^(system_hol|simax_.*/benchmarks|simax_legacy/.*|simax_serialization/simax_serialization_protobuf/.*.cpp)
+
+  - repo: https://github.com/ansible-community/ansible-lint
+    rev: v6.0.2
+    hooks:
+      - id: ansible-lint
+        args:
+          - --write
+          - --nocolor
+          - -x
+          - fqcn-builtins,no-handler,yaml
+          - --project-dir
+          - .
+          - tools/ansible/workstation
+        files: ^(tools/ansible/workstation)(.*)
+        always_run: false
